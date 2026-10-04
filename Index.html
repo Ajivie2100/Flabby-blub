@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title></title>
+</head>
+
+<body>
+  
+</body>
+
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Floppy Bird</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#70c5ce;--fg:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b2a49;--fg:#fff}}
+:root[data-theme="dark"]{--bg:#1b2a49;--fg:#fff}
+html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);text-align:center;color:var(--fg);pointer-events:none;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+#score{font-size:56px;font-weight:800;margin-top:12px}
+#msg{font-size:20px;font-weight:700;margin-top:8px;white-space:pre-line}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><div id="score">0</div><div id="msg">Tap to flap</div></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),sc=document.getElementById('score'),msg=document.getElementById('msg');
+let W,H,S,state='ready',score=0,best=0,bird,pipes,last=0,overAt=0,dead=0;
+try{best=+localStorage.getItem('floppyBest')||0}catch(e){}
+function resize(){const d=window.devicePixelRatio||1;W=innerWidth;H=innerHeight;c.width=W*d;c.height=H*d;ctx.setTransform(d,0,0,d,0,0);S=Math.min(H/640,W/360*1.1)}
+addEventListener('resize',resize);resize();
+function reset(){bird={x:W*0.28,y:H*0.45,v:0,r:16*S};pipes=[];score=0;sc.textContent=0;state='ready';msg.textContent='Best: '+best+'\nTap to flap'}
+function flap(){
+  if(state==='ready'){state='play';msg.textContent=''}
+  if(state==='play')bird.v=-7.6*S;
+  else if(state==='over'&&performance.now()-overAt>450)reset();
+}
+addEventListener('pointerdown',e=>{e.preventDefault();flap()},{passive:false});
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();flap()}});
+function spawn(){const g=175*S,m=90*S;pipes.push({x:W+10,gy:m+Math.random()*(H-m*2-g-80*S)+g/2,g,passed:false})}
+function end(){state='over';overAt=performance.now();if(score>best){best=score;try{localStorage.setItem('floppyBest',best)}catch(e){}}msg.textContent='Game over\nScore '+score+'  Best '+best+'\nTap to retry'}
+function update(k){
+  const gnd=H-70*S;
+  if(state==='ready'){bird.y=H*0.45+Math.sin(performance.now()/250)*8*S;return}
+  if(state==='over'){if(bird.y<gnd-bird.r){bird.v+=0.5*S*k;bird.y+=bird.v*k}return}
+  bird.v+=0.46*S*k;bird.y+=bird.v*k;
+  const pw=62*S;
+  if(!pipes.length||pipes[pipes.length-1].x<W-230*S)spawn();
+  for(const p of pipes){
+    p.x-=2.5*S*k;
+    if(!p.passed&&p.x+pw<bird.x){p.passed=true;score++;sc.textContent=score}
+    if(bird.x+bird.r>p.x&&bird.x-bird.r<p.x+pw&&(bird.y-bird.r<p.gy-p.g/2||bird.y+bird.r>p.gy+p.g/2))end();
+  }
+  pipes=pipes.filter(p=>p.x>-pw-10);
+  if(bird.y+bird.r>gnd){bird.y=gnd-bird.r;end()}
+  if(bird.y<bird.r){bird.y=bird.r;bird.v=0}
+}
+function draw(){
+  const gnd=H-70*S,pw=62*S;
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#4ec0ca');g.addColorStop(1,'#bfe9ee');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  for(const p of pipes){
+    ctx.fillStyle='#5cb85c';ctx.strokeStyle='#2f6b2f';ctx.lineWidth=3;
+    const top=p.gy-p.g/2,bot=p.gy+p.g/2,cap=22*S;
+    ctx.fillRect(p.x,-5,pw,top+5);ctx.strokeRect(p.x,-5,pw,top+5);
+    ctx.fillRect(p.x-4*S,top-cap,pw+8*S,cap);ctx.strokeRect(p.x-4*S,top-cap,pw+8*S,cap);
+    ctx.fillRect(p.x,bot,pw,gnd-bot);ctx.strokeRect(p.x,bot,pw,gnd-bot);
+    ctx.fillRect(p.x-4*S,bot,pw+8*S,cap);ctx.strokeRect(p.x-4*S,bot,pw+8*S,cap);
+  }
+  ctx.fillStyle='#ded895';ctx.fillRect(0,gnd,W,H-gnd);
+  ctx.fillStyle='#8bc34a';ctx.fillRect(0,gnd,W,10*S);
+  ctx.save();ctx.translate(bird.x,bird.y);ctx.rotate(Math.max(-0.5,Math.min(1.2,bird.v/(12*S))));
+  const r=bird.r;
+  ctx.fillStyle='#ffd23f';ctx.strokeStyle='#8a5a00';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(0,0,r,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(r*.35,-r*.3,r*.38,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(r*.48,-r*.3,r*.15,0,7);ctx.fill();
+  ctx.fillStyle='#ff7043';ctx.beginPath();ctx.moveTo(r*.7,0);ctx.lineTo(r*1.45,r*.15);ctx.lineTo(r*.7,r*.45);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#f4b400';ctx.beginPath();ctx.ellipse(-r*.35,r*.15,r*.5,r*.3,-0.4,0,7);ctx.fill();ctx.stroke();
+  ctx.restore();
+}
+function loop(t){const k=Math.min((t-last)/16.67,3)||1;last=t;update(k);draw();requestAnimationFrame(loop)}
+reset();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
